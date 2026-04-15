@@ -1,376 +1,217 @@
-<!DOCTYPE html>
-<html lang="en" class="h-full">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transaction Insights • Emergent Preview</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        body { font-family: 'Inter', system_ui, sans-serif; }
-        .glass { backdrop-filter: blur(12px); }
-        .card-hover { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); }
-    </style>
-</head>
-<body class="h-full bg-zinc-950 text-zinc-100">
+# main.py
 
-    <!-- HEADER -->
-    <div class="border-b border-zinc-800 bg-zinc-900 sticky top-0 z-50">
-        <div class="max-w-screen-2xl mx-auto px-8 py-5 flex items-center justify-between">
-            <div class="flex items-center gap-x-3">
-                <div class="w-8 h-8 bg-emerald-500 rounded-2xl flex items-center justify-center text-white font-bold text-xl">E</div>
-                <div>
-                    <h1 class="text-2xl font-semibold tracking-tight">Emergent</h1>
-                    <p class="text-xs text-emerald-400 font-medium -mt-1">Fullstack App</p>
-                </div>
-                <div class="ml-8 text-xl font-semibold text-white/90">Retail Performance at a Glance</div>
-            </div>
-            
-            <div class="flex items-center gap-x-6">
-                <button onclick="showDataEntry()" 
-                        class="flex items-center gap-x-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-2.5 rounded-3xl font-medium transition-colors">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>Data Entry</span>
-                </button>
-                
-                <div class="flex items-center gap-x-2 bg-zinc-800 text-sm rounded-3xl px-4 py-1">
-                    <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                    Live
-                </div>
-                
-                <div class="flex items-center gap-x-3">
-                    <div class="text-right">
-                        <div class="text-sm font-medium">Harshit</div>
-                        <div class="text-xs text-zinc-400">Puducherry, IN</div>
-                    </div>
-                    <div class="w-9 h-9 bg-zinc-700 rounded-2xl flex items-center justify-center text-xl">👋</div>
-                </div>
-            </div>
-        </div>
-    </div>
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import datetime
+from collections import defaultdict
+import uuid
 
-    <div class="max-w-screen-2xl mx-auto px-8 py-8">
-        <!-- AI INSIGHTS -->
-        <div class="mb-8 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex items-center justify-between">
-            <div>
-                <div class="flex items-center gap-x-2 text-emerald-400 font-semibold mb-1">
-                    <i class="fa-solid fa-brain"></i>
-                    AI Insights
-                </div>
-                <p id="ai-insight-text" class="text-zinc-300 text-lg">Add your first transactions to unlock powerful AI insights.</p>
-            </div>
-            <button onclick="generateFakeInsight()" 
-                    class="text-sm bg-white/10 hover:bg-white/20 px-5 py-2 rounded-3xl flex items-center gap-x-2">
-                <i class="fa-solid fa-magic"></i>
-                Generate Insight
-            </button>
-        </div>
+app = FastAPI(title="Transaction Insights API", version="1.0.0")
 
-        <!-- KEY METRICS -->
-        <div class="grid grid-cols-4 gap-6 mb-8" id="metrics">
-            <!-- JS fills this -->
-        </div>
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-        <div class="grid grid-cols-12 gap-6">
-            <!-- SALES CHART -->
-            <div class="col-span-8 bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <div class="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 class="text-2xl font-semibold">Sales Performance</h2>
-                        <p class="text-zinc-400">Revenue trends over time</p>
-                    </div>
-                    <div class="flex bg-zinc-800 rounded-3xl p-1 text-sm">
-                        <button onclick="toggleTimeframe(0)" id="btn-daily" class="px-6 py-2 rounded-3xl font-medium bg-emerald-600">Daily</button>
-                        <button onclick="toggleTimeframe(1)" id="btn-monthly" class="px-6 py-2 rounded-3xl font-medium">Monthly</button>
-                    </div>
-                </div>
-                <div class="h-80">
-                    <canvas id="salesChart"></canvas>
-                </div>
-                <p id="sales-placeholder" class="hidden text-center text-zinc-400 mt-4">No transactions yet. Add data to see revenue trends.</p>
-            </div>
+# ─────────────────────────────────────────────
+# In-memory DB (swap with MongoDB in production)
+# ─────────────────────────────────────────────
+transactions_db: List[dict] = []
 
-            <!-- INVENTORY ALERTS -->
-            <div class="col-span-4 bg-zinc-900 border border-zinc-800 rounded-3xl p-8 flex flex-col">
-                <h2 class="text-2xl font-semibold mb-6">Inventory Alerts</h2>
-                <div id="alerts-list" class="flex-1 space-y-3">
-                    <!-- JS fills this -->
-                </div>
-                <p id="alerts-placeholder" class="text-zinc-400 text-center mt-auto">No alerts yet.</p>
-            </div>
+# ─────────────────────────────────────────────
+# Models
+# ─────────────────────────────────────────────
 
-            <!-- TOP PRODUCTS -->
-            <div class="col-span-12 bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <div class="flex justify-between mb-6">
-                    <div>
-                        <h2 class="text-2xl font-semibold">Top Performing Products</h2>
-                        <p class="text-zinc-400">Inventory analysis and revenue contribution</p>
-                    </div>
-                    <button onclick="addRandomProduct()" class="text-emerald-400 hover:text-emerald-300 text-sm flex items-center gap-x-1">
-                        <i class="fa-solid fa-plus"></i> Add Product
-                    </button>
-                </div>
-                
-                <table class="w-full" id="products-table">
-                    <thead>
-                        <tr class="border-b border-zinc-700 text-left text-sm text-zinc-400">
-                            <th class="pb-4 font-medium">Product</th>
-                            <th class="pb-4 font-medium text-right">Units Sold</th>
-                            <th class="pb-4 font-medium text-right">Revenue</th>
-                            <th class="pb-4 font-medium text-right">% of Total</th>
-                        </tr>
-                    </thead>
-                    <tbody id="products-body" class="text-sm divide-y divide-zinc-700">
-                        <!-- JS fills this -->
-                    </tbody>
-                </table>
-                <p id="products-placeholder" class="hidden text-center py-12 text-zinc-400">No product data yet. Add transactions to populate this table.</p>
-            </div>
-        </div>
-    </div>
+class Transaction(BaseModel):
+    id: Optional[str] = None
+    date: str                          # "YYYY-MM-DD"
+    description: str
+    amount: float
+    type: str = "debit"                # "credit" or "debit"
+    category: Optional[str] = None
+    merchant: Optional[str] = None
 
-    <!-- DATA ENTRY MODAL -->
-    <div id="data-modal" onclick="if(event.target===this)hideModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center">
-        <div onclick="event.stopImmediatePropagation()" class="bg-zinc-900 w-full max-w-lg mx-4 rounded-3xl p-8">
-            <h3 class="text-2xl font-semibold mb-6">Add New Transaction</h3>
-            <div class="space-y-6">
-                <div>
-                    <label class="block text-xs font-medium text-zinc-400 mb-1">Date</label>
-                    <input type="date" id="modal-date" value="2026-04-15" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-zinc-400 mb-1">Product</label>
-                        <input id="modal-product" type="text" placeholder="Wireless Earbuds" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-zinc-400 mb-1">Category</label>
-                        <select id="modal-category" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none">
-                            <option>Electronics</option>
-                            <option>Fashion</option>
-                            <option>Home &amp; Kitchen</option>
-                            <option>Beauty</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="grid grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-zinc-400 mb-1">Quantity</label>
-                        <input id="modal-qty" type="number" value="1" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-zinc-400 mb-1">Price</label>
-                        <input id="modal-price" type="number" value="49.99" step="0.01" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-zinc-400 mb-1">Cost</label>
-                        <input id="modal-cost" type="number" value="22.50" step="0.01" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none">
-                    </div>
-                </div>
-                <div class="flex gap-4 pt-4">
-                    <button onclick="hideModal()" class="flex-1 py-4 rounded-3xl border border-zinc-700 font-medium">Cancel</button>
-                    <button onclick="saveTransaction()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 rounded-3xl font-medium">Save Transaction</button>
-                </div>
-            </div>
-        </div>
-    </div>
+class TransactionUpdate(BaseModel):
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    type: Optional[str] = None
+    category: Optional[str] = None
+    merchant: Optional[str] = None
 
-    <script>
-        // Global data
-        let transactions = []
-        let productsData = [
-            { name: "Wireless Earbuds", units: 124, revenue: 6199.76, percent: 28 },
-            { name: "Smart Watch", units: 87, revenue: 4349.13, percent: 20 },
-            { name: "Laptop Sleeve", units: 203, revenue: 3045.00, percent: 14 }
-        ]
-        let salesChartInstance = null
+# ─────────────────────────────────────────────
+# Auto-categorization
+# ─────────────────────────────────────────────
 
-        // Load sample data on start
-        function loadSampleData() {
-            transactions = [
-                { date: "2026-04-10", product: "Wireless Earbuds", qty: 12, price: 49.99, cost: 22.50 },
-                { date: "2026-04-11", product: "Smart Watch", qty: 8, price: 49.99, cost: 22.50 },
-                { date: "2026-04-12", product: "Laptop Sleeve", qty: 25, price: 15.00, cost: 7.50 },
-                { date: "2026-04-13", product: "Wireless Earbuds", qty: 15, price: 49.99, cost: 22.50 },
-            ]
-            updateDashboard()
+CATEGORY_RULES = {
+    "Food & Dining":   ["zomato", "swiggy", "restaurant", "cafe", "pizza", "burger", "food", "eat", "biryani", "dine"],
+    "Transport":       ["uber", "ola", "rapido", "petrol", "fuel", "metro", "bus", "cab", "taxi", "auto"],
+    "Shopping":        ["amazon", "flipkart", "myntra", "mall", "store", "shop", "meesho", "nykaa"],
+    "Utilities":       ["electricity", "water", "gas", "internet", "broadband", "airtel", "jio", "bsnl", "wifi"],
+    "Entertainment":   ["netflix", "hotstar", "spotify", "prime", "movie", "theatre", "youtube", "gaming"],
+    "Health":          ["pharmacy", "hospital", "clinic", "doctor", "medicine", "apollo", "medplus"],
+    "Education":       ["udemy", "coursera", "school", "college", "tuition", "book", "course"],
+    "Salary / Income": ["salary", "payroll", "income", "stipend", "bonus", "freelance", "payment received"],
+    "Investments":     ["mutual fund", "sip", "stocks", "zerodha", "groww", "nps", "fd", "rd"],
+    "EMI / Loan":      ["emi", "loan", "credit card", "hdfc", "icici", "sbi", "kotak"],
+}
+
+def auto_categorize(description: str) -> str:
+    desc = description.lower()
+    for category, keywords in CATEGORY_RULES.items():
+        if any(kw in desc for kw in keywords):
+            return category
+    return "Others"
+
+# ─────────────────────────────────────────────
+# Routes
+# ─────────────────────────────────────────────
+
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "Transaction Insights API running"}
+
+
+# ── Transactions CRUD ──
+
+@app.post("/transactions", response_model=Transaction, status_code=201)
+def create_transaction(txn: Transaction):
+    txn.id = str(uuid.uuid4())
+    if not txn.category:
+        txn.category = auto_categorize(txn.description)
+    transactions_db.append(txn.dict())
+    return txn
+
+
+@app.get("/transactions", response_model=List[Transaction])
+def list_transactions(
+    type: Optional[str] = Query(None, description="Filter by 'credit' or 'debit'"),
+    category: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+):
+    results = transactions_db[:]
+    if type:
+        results = [t for t in results if t["type"] == type]
+    if category:
+        results = [t for t in results if t["category"] == category]
+    if start_date:
+        results = [t for t in results if t["date"] >= start_date]
+    if end_date:
+        results = [t for t in results if t["date"] <= end_date]
+    return results
+
+
+@app.get("/transactions/{txn_id}", response_model=Transaction)
+def get_transaction(txn_id: str):
+    for t in transactions_db:
+        if t["id"] == txn_id:
+            return t
+    raise HTTPException(status_code=404, detail="Transaction not found")
+
+
+@app.put("/transactions/{txn_id}", response_model=Transaction)
+def update_transaction(txn_id: str, update: TransactionUpdate):
+    for t in transactions_db:
+        if t["id"] == txn_id:
+            for field, value in update.dict(exclude_none=True).items():
+                t[field] = value
+            return t
+    raise HTTPException(status_code=404, detail="Transaction not found")
+
+
+@app.delete("/transactions/{txn_id}")
+def delete_transaction(txn_id: str):
+    global transactions_db
+    before = len(transactions_db)
+    transactions_db = [t for t in transactions_db if t["id"] != txn_id]
+    if len(transactions_db) == before:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"message": "Deleted successfully"}
+
+
+# ── Insights / Analytics ──
+
+@app.get("/insights/summary")
+def get_summary():
+    if not transactions_db:
+        return {"message": "No transactions available"}
+
+    total_income   = sum(t["amount"] for t in transactions_db if t["type"] == "credit")
+    total_expenses = sum(t["amount"] for t in transactions_db if t["type"] == "debit")
+    net_balance    = total_income - total_expenses
+
+    return {
+        "total_income":    round(total_income, 2),
+        "total_expenses":  round(total_expenses, 2),
+        "net_balance":     round(net_balance, 2),
+        "total_transactions": len(transactions_db),
+        "savings_rate":    round((net_balance / total_income * 100) if total_income else 0, 2),
+    }
+
+
+@app.get("/insights/by-category")
+def insights_by_category():
+    category_data = defaultdict(lambda: {"total": 0.0, "count": 0})
+    for t in transactions_db:
+        if t["type"] == "debit":
+            cat = t.get("category", "Others")
+            category_data[cat]["total"] += t["amount"]
+            category_data[cat]["count"] += 1
+
+    return [
+        {"category": cat, "total": round(data["total"], 2), "count": data["count"]}
+        for cat, data in sorted(category_data.items(), key=lambda x: x[1]["total"], reverse=True)
+    ]
+
+
+@app.get("/insights/by-month")
+def insights_by_month():
+    monthly = defaultdict(lambda: {"income": 0.0, "expenses": 0.0})
+    for t in transactions_db:
+        try:
+            month = t["date"][:7]  # "YYYY-MM"
+        except Exception:
+            continue
+        if t["type"] == "credit":
+            monthly[month]["income"] += t["amount"]
+        else:
+            monthly[month]["expenses"] += t["amount"]
+
+    return [
+        {
+            "month":    month,
+            "income":   round(data["income"], 2),
+            "expenses": round(data["expenses"], 2),
+            "net":      round(data["income"] - data["expenses"], 2),
         }
+        for month, data in sorted(monthly.items())
+    ]
 
-        function calculateMetrics() {
-            if (transactions.length === 0) return { revenue: 0, profit: 0, orders: 0, avgOrder: 0 }
-            let revenue = 0, profit = 0
-            transactions.forEach(t => {
-                const r = t.qty * t.price
-                revenue += r
-                profit += (r - t.qty * t.cost)
-            })
-            return {
-                revenue: revenue,
-                profit: profit,
-                orders: transactions.length,
-                avgOrder: revenue / transactions.length
-            }
-        }
 
-        function renderMetrics() {
-            const m = calculateMetrics()
-            document.getElementById('metrics').innerHTML = `
-                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 card-hover">
-                    <div class="flex justify-between"><div><p class="text-xs text-zinc-400">TOTAL REVENUE</p><p class="text-4xl font-semibold mt-1">$${(m.revenue).toLocaleString()}</p></div><i class="fa-solid fa-dollar-sign text-4xl text-emerald-500"></i></div>
-                </div>
-                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 card-hover">
-                    <div class="flex justify-between"><div><p class="text-xs text-zinc-400">GROSS PROFIT</p><p class="text-4xl font-semibold mt-1">$${(m.profit).toLocaleString()}</p></div><i class="fa-solid fa-chart-line text-4xl text-emerald-500"></i></div>
-                </div>
-                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 card-hover">
-                    <div class="flex justify-between"><div><p class="text-xs text-zinc-400">TOTAL ORDERS</p><p class="text-4xl font-semibold mt-1">${m.orders}</p></div><i class="fa-solid fa-box text-4xl text-emerald-500"></i></div>
-                </div>
-                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 card-hover">
-                    <div class="flex justify-between"><div><p class="text-xs text-zinc-400">AVG ORDER VALUE</p><p class="text-4xl font-semibold mt-1">$${(m.avgOrder).toFixed(2)}</p></div><i class="fa-solid fa-tag text-4xl text-emerald-500"></i></div>
-                </div>
-            `
-        }
+@app.get("/insights/top-merchants")
+def top_merchants(limit: int = 5):
+    merchant_totals = defaultdict(float)
+    for t in transactions_db:
+        if t.get("merchant") and t["type"] == "debit":
+            merchant_totals[t["merchant"]] += t["amount"]
 
-        function renderSalesChart(isMonthly = false) {
-            const ctx = document.getElementById('salesChart')
-            if (salesChartInstance) salesChartInstance.destroy()
+    sorted_merchants = sorted(merchant_totals.items(), key=lambda x: x[1], reverse=True)
+    return [
+        {"merchant": m, "total": round(amt, 2)}
+        for m, amt in sorted_merchants[:limit]
+    ]
 
-            const placeholder = document.getElementById('sales-placeholder')
-            if (transactions.length === 0) {
-                placeholder.classList.remove('hidden')
-                ctx.style.display = 'none'
-                return
-            }
-            placeholder.classList.add('hidden')
-            ctx.style.display = 'block'
 
-            const labels = isMonthly 
-                ? ['Jan', 'Feb', 'Mar', 'Apr']
-                : ['Apr 10', 'Apr 11', 'Apr 12', 'Apr 13', 'Apr 14', 'Apr 15']
-            const dataPoints = isMonthly 
-                ? [1240, 2890, 4120, 6750]
-                : [599, 399, 375, 749, 1249, 899]
-
-            salesChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets: [{ label: 'Revenue ($)', data: dataPoints, borderColor: '#10b981', borderWidth: 3, tension: 0.3, pointBackgroundColor: '#fff', pointBorderWidth: 2 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#27272a' }, ticks: { color: '#a1a1aa' } }, x: { grid: { color: '#27272a' }, ticks: { color: '#a1a1aa' } } } }
-            })
-        }
-
-        function toggleTimeframe(mode) {
-            document.getElementById('btn-daily').classList.toggle('bg-emerald-600', mode === 0)
-            document.getElementById('btn-monthly').classList.toggle('bg-emerald-600', mode === 1)
-            renderSalesChart(mode === 1)
-        }
-
-        function renderProducts() {
-            const tbody = document.getElementById('products-body')
-            const placeholder = document.getElementById('products-placeholder')
-            if (productsData.length === 0) {
-                placeholder.classList.remove('hidden')
-                tbody.innerHTML = ''
-                return
-            }
-            placeholder.classList.add('hidden')
-            tbody.innerHTML = productsData.map(p => `
-                <tr>
-                    <td class="py-4 font-medium">${p.name}</td>
-                    <td class="py-4 text-right">${p.units}</td>
-                    <td class="py-4 text-right">$${(p.revenue).toLocaleString()}</td>
-                    <td class="py-4 text-right">${p.percent}%</td>
-                </tr>
-            `).join('')
-        }
-
-        function renderAlerts() {
-            const list = document.getElementById('alerts-list')
-            const placeholder = document.getElementById('alerts-placeholder')
-            const alerts = [
-                { icon: 'fa-triangle-exclamation', text: 'Low stock: Wireless Earbuds (only 8 left)', color: 'text-amber-400' },
-                { icon: 'fa-box', text: 'Restock recommended: Smart Watch', color: 'text-blue-400' }
-            ]
-            if (alerts.length === 0) { placeholder.classList.remove('hidden'); return }
-            placeholder.classList.add('hidden')
-            list.innerHTML = alerts.map(a => `
-                <div class="flex items-start gap-3 bg-zinc-800 rounded-2xl p-4">
-                    <i class="fa-solid ${a.icon} ${a.color} mt-0.5"></i>
-                    <p class="text-sm">${a.text}</p>
-                </div>
-            `).join('')
-        }
-
-        function updateDashboard() {
-            renderMetrics()
-            renderSalesChart(false)
-            renderProducts()
-            renderAlerts()
-            if (transactions.length > 0) {
-                document.getElementById('ai-insight-text').innerHTML = `✅ <span class="font-medium">Your sales are up 34% this week.</span> Wireless Earbuds are your best-seller.`
-            }
-        }
-
-        function saveTransaction() {
-            const date = document.getElementById('modal-date').value
-            const product = document.getElementById('modal-product').value || 'New Product'
-            const qty = parseFloat(document.getElementById('modal-qty').value) || 1
-            const price = parseFloat(document.getElementById('modal-price').value) || 29.99
-            const cost = parseFloat(document.getElementById('modal-cost').value) || 12
-
-            transactions.unshift({ date, product, qty, price, cost })
-
-            const existing = productsData.find(p => p.name === product)
-            if (existing) {
-                existing.units += qty
-                existing.revenue += qty * price
-                existing.percent = Math.round((existing.revenue / 20000) * 100)
-            } else {
-                productsData.unshift({ name: product, units: qty, revenue: qty * price, percent: 18 })
-            }
-
-            hideModal()
-            updateDashboard()
-        }
-
-        function addRandomProduct() {
-            const names = ["Bluetooth Speaker", "Leather Wallet", "Desk Lamp", "Yoga Mat"]
-            const randomName = names[Math.floor(Math.random() * names.length)]
-            productsData.unshift({
-                name: randomName,
-                units: Math.floor(Math.random() * 80) + 20,
-                revenue: Math.floor(Math.random() * 4000) + 800,
-                percent: Math.floor(Math.random() * 25) + 10
-            })
-            renderProducts()
-        }
-
-        function showDataEntry() {
-            document.getElementById('data-modal').classList.remove('hidden')
-            document.getElementById('data-modal').classList.add('flex')
-        }
-
-        function hideModal() {
-            const modal = document.getElementById('data-modal')
-            modal.classList.add('hidden')
-            modal.classList.remove('flex')
-        }
-
-        function generateFakeInsight() {
-            const msgs = [
-                "📈 Your average order value increased by $12 since last month!",
-                "🔥 Top trend: Customers buying Electronics together spend 2.4x more.",
-                "💡 Recommendation: Run a 15% bundle discount on Earbuds + Charger."
-            ]
-            document.getElementById('ai-insight-text').innerHTML = msgs[Math.floor(Math.random() * msgs.length)]
-        }
-
-        // Start the app
-        window.onload = () => {
-            loadSampleData()
-            console.log('%c✅ Transaction Insights dashboard is now LIVE! Click Data Entry to add real transactions.', 'color:#10b981; font-size:14px; font-weight:600')
-        }
-    </script>
-</body>
-</html>
+@app.get("/insights/recent")
+def recent_transactions(limit: int = 10):
+    sorted_txns = sorted(
+        transactions_db,
+        key=lambda x: x.get("date", ""),
+        reverse=True
+    )
+    return sorted_txns[:limit]
